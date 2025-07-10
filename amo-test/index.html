@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <form id="lead-form">
+        <input name="name" placeholder="Ваше имя" required />
+        <input name="email" type="email" placeholder="Email" required />
+        <input name="phone" placeholder="Телефон" required />
+        <select name="course">
+            <option value="economics">Экономика</option>
+            <option value="it">IT</option>
+        </select>
+        <button type="submit">Отправить</button>
+    </form>
+    <script>
+        const url = 'http://localhost:3000'
+        const form = document.getElementById('lead-form')
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const body = Object.fromEntries(formData);
+            await fetch(`${url}/api/lead`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            alert("Заявка отправлена!");
+            
+        });
+    </script>
+
+</body>
+
+</html>

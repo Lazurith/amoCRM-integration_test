@@ -1,52 +1,127 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Регистрация ученика</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+            max-width: 400px;
+            margin: auto;
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        input,
+        select {
+            display: block;
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+        }
+
+        button {
+            padding: 0.7rem 1.2rem;
+        }
+    </style>
 </head>
 
 <body>
-    <form id="leadForm">
-        <input type="text" name="name" placeholder="Имя" required>
-        <input type="email" name="email" placeholder="Email" required>
-        <input type="tel" name="phone" placeholder="Телефон" required>
-        <select name="stage" required>
-            <option value="78254394">Первичный контакт</option>
-            <option value="78254398">Переговоры</option>
-            <option value="78254402">Принимают решение</option>
-            <option value="78254406">Согласование договора</option>
-        </select>
-        <button type="submit">Отправить</button>
-    </form>
-    <script>
-        document.getElementById('leadForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
+    <h2>Регистрация ученика</h2>
 
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
+    <div id="step1" class="step active">
+        <label>Номер телефона</label>
+        <input type="tel" id="phone" placeholder="+998..." required />
+        <button onclick="sendStep1()">Далее</button>
+    </div>
+
+    <div id="step2" class="step">
+        <label>Имя</label>
+        <input type="text" id="name" placeholder="Имя" required />
+
+        <label>Email</label>
+        <input type="email" id="email" placeholder="example@mail.com" required />
+
+        <label>Курс</label>
+        <select id="course" required>
+            <option value="">Выберите курс</option>
+            <option value="IT">IT</option>
+            <option value="Design">Дизайн</option>
+            <option value="Economics">Экономика</option>
+        </select>
+
+        <button onclick="sendStep2()">Отправить</button>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+
+        function showStep(step) {
+            document.querySelectorAll('.step').forEach(div => div.classList.remove('active'));
+            if (step > 0) {
+                document.getElementById('step' + step).classList.add('active');
+            } else {
+                document.getElementById('step1').classList.add('active');
+            }
+        }
+
+        async function sendStep1() {
+            const phone = document.getElementById('phone').value.trim();
+            if (!phone) return alert('Введите номер');
 
             try {
-                const response = await fetch('http://localhost:3000/api/lead', {
+                const res = await fetch(`${API_URL}/api/lead-step1`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
                 });
 
-                const result = await response.json();
-                console.log(result);
-                alert(result.message || 'Заявка отправлена!');
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showStep(2);
             } catch (err) {
-                console.error(err);
-                alert('Ошибка при отправке формы');
+                alert('Ошибка шага 1: ' + err.message);
             }
-        });
+        }
+
+        async function sendStep2() {
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const course = document.getElementById('course').value;
+            const phone = document.getElementById('phone').value.trim();
+
+            if (!name || !email || !course) return alert('Заполните все поля');
+
+            try {
+                const res = await fetch(`${API_URL}/api/lead-step2`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, course, phone })
+                });
+
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById('status').innerText = '✅ Заявка успешно отправлена!';
+                showStep(0);
+            } catch (err) {
+                console.error('Ошибка на шаге 2:', err);
+                alert('Ошибка шага 2: ' + err.message);
+            }
+        }
     </script>
-
-
 </body>
 
 </html>

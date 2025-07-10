@@ -53,20 +53,22 @@ async function refreshTokensIfNeeded() {
 
 // 📥 Обработка формы: создаём сделку и контакт
 app.post('/api/lead', async (req, res) => {
-    const { name, phone, email, course } = req.body;
-    console.log('📨 Получена заявка от студента:', req.body);
+    const data = req.body;
+    console.log('📩 Получена заявка от студента:', data);
+
+    const tokens = await refreshTokensIfNeeded();
+    const accessToken = tokens.access_token;
+
+    const statusId = parseInt(data.stage); // Получаем выбранный этап
 
     try {
-        const tokens = await refreshTokensIfNeeded();
-        const accessToken = tokens.access_token;
-
-        // 1. Создание сделки (лида)
+        // Создание сделки
         const leadResponse = await axios.post(
             `https://${AMO_DOMAIN}/api/v4/leads`,
             [
                 {
-                    name: `Заявка с сайта: курс ${course || 'не указан'}`,
-                    price: 0
+                    name: `Заявка: ${data.name}`,
+                    status_id: statusId
                 }
             ],
             {
@@ -79,20 +81,20 @@ app.post('/api/lead', async (req, res) => {
 
         const leadId = leadResponse.data._embedded.leads[0].id;
 
-        // 2. Создание контакта и привязка к сделке
+        // Создание контакта
         await axios.post(
             `https://${AMO_DOMAIN}/api/v4/contacts`,
             [
                 {
-                    name: name,
+                    name: data.name,
                     custom_fields_values: [
                         {
                             field_code: 'PHONE',
-                            values: [{ value: phone }]
+                            values: [{ value: data.phone }]
                         },
                         {
                             field_code: 'EMAIL',
-                            values: [{ value: email }]
+                            values: [{ value: data.email }]
                         }
                     ],
                     _embedded: {
@@ -108,14 +110,14 @@ app.post('/api/lead', async (req, res) => {
             }
         );
 
-        console.log('✅ Сделка и контакт успешно созданы в amoCRM');
-        res.json({ status: 'ok', message: 'Сделка и контакт созданы в amoCRM' });
+        res.json({ status: 'ok', message: 'Контакт и сделка созданы в выбранном этапе воронки' });
 
     } catch (error) {
         console.error('❌ Ошибка при создании лида/контакта:', error.response?.data || error.message);
-        res.status(500).json({ status: 'error', message: 'Не удалось создать лид/контакт' });
+        res.status(500).json({ error: 'Ошибка при отправке в amoCRM' });
     }
 });
+
 
 // 🌐 OAuth редирект от amoCRM
 app.get('/oauth', async (req, res) => {

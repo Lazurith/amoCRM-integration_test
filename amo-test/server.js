@@ -148,3 +148,20 @@ app.get('/oauth', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
 });
+
+app.get('/pipeline-statuses', async (req, res) => {
+    const tokens = await refreshTokensIfNeeded();
+    try {
+        const response = await axios.get(`https://${AMO_DOMAIN}/api/v4/leads/pipelines`, {
+            headers: {
+                Authorization: `Bearer ${tokens.access_token}`
+            }
+        });
+
+        res.json(response.data);
+    } catch (err) {
+        console.error('Ошибка при получении стадий:', err.response?.data || err.message);
+        res.status(500).json({ error: 'Не удалось получить стадии' });
+    }
+});
+

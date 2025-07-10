@@ -8,32 +8,44 @@
 </head>
 
 <body>
-    <form id="lead-form">
-        <input name="name" placeholder="Ваше имя" required />
-        <input name="email" type="email" placeholder="Email" required />
-        <input name="phone" placeholder="Телефон" required />
-        <select name="course">
-            <option value="economics">Экономика</option>
-            <option value="it">IT</option>
+    <form id="leadForm">
+        <input type="text" name="name" placeholder="Имя" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="tel" name="phone" placeholder="Телефон" required>
+        <select name="stage" required>
+            <option value="78254394">Первичный контакт</option>
+            <option value="78254398">Переговоры</option>
+            <option value="78254402">Принимают решение</option>
+            <option value="78254406">Согласование договора</option>
         </select>
         <button type="submit">Отправить</button>
     </form>
     <script>
-        const url = 'http://localhost:3000'
-        const form = document.getElementById('lead-form')
-        form.addEventListener('submit', async (e) => {
+        document.getElementById('leadForm').addEventListener('submit', async function (e) {
             e.preventDefault();
+
             const formData = new FormData(e.target);
-            const body = Object.fromEntries(formData);
-            await fetch(`${url}/api/lead`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            alert("Заявка отправлена!");
-            
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('http://localhost:3000/api/lead', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                console.log(result);
+                alert(result.message || 'Заявка отправлена!');
+            } catch (err) {
+                console.error(err);
+                alert('Ошибка при отправке формы');
+            }
         });
     </script>
+
 
 </body>
 

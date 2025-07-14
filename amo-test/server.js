@@ -17,6 +17,9 @@ const TOKEN_PATH = './tokens.json';
 
 let temporaryStorage = {};
 
+// 👉 Замените на ID вашего кастомного поля "Курс"
+const COURSE_FIELD_ID = 123456; // ← замените это значение на своё
+
 function saveTokens(tokens) {
     const expiresAt = Date.now() + tokens.expires_in * 1000;
     fs.writeFileSync(TOKEN_PATH, JSON.stringify({ ...tokens, expires_at: expiresAt }, null, 2));
@@ -54,23 +57,31 @@ app.post('/api/lead-step1', async (req, res) => {
             'Content-Type': 'application/json',
         };
 
+        // 1. Создаем сделку
         const leadResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/leads`, [{
             name: 'Новый интерес',
             status_id: 78254394,
+            // pipeline_id: 9850462, 
         }], { headers });
 
         const leadId = leadResp.data._embedded.leads[0].id;
 
+        // 2. Создаем контакт
         const contactResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/contacts`, [{
             name: 'Без имени',
             custom_fields_values: [{
                 field_code: 'PHONE',
-                values: [{ value: phone }],
-            }],
-            _embedded: { leads: [{ id: leadId }] },
+                values: [{ value: phone, enum_code: 'WORK' }]
+            }]
         }], { headers });
 
         const contactId = contactResp.data._embedded.contacts[0].id;
+
+        // 3. Привязываем контакт к сделке
+        await axios.post(`https://${AMO_DOMAIN}/api/v4/leads/${leadId}/link`, [{
+            to_entity_id: contactId,
+            to_entity_type: 'contacts'
+        }], { headers });
 
         temporaryStorage[phone] = { leadId, contactId };
 
@@ -84,7 +95,6 @@ app.post('/api/lead-step1', async (req, res) => {
 app.post('/api/lead-step2', async (req, res) => {
     const { name, email, course, phone } = req.body;
     const entry = temporaryStorage[phone];
-
     if (!entry) return res.status(404).json({ error: 'Сначала выполните шаг 1' });
 
     try {
@@ -95,33 +105,43 @@ app.post('/api/lead-step2', async (req, res) => {
         };
 
         // Обновляем сделку
-        await axios.patch(`https://${AMO_DOMAIN}/api/v4/leads`, [
-            {
-                id: entry.leadId,
-                name: `Заявка: курс ${course}`,
-                status_id: 78254398,
-            }
-        ], { headers });
+        await axios.patch(`https://${AMO_DOMAIN}/api/v4/leads`, [{
+            id: entry.leadId,
+            name: `Заявка: курс ${course}`,
+            status_id: 78254398
+        }], { headers });
 
         // Обновляем контакт
-        const contactUpdatePayload = {
+        const contactUpdatePayload = [
+            {
+                field_code: 'PHONE',
+                values: [{ value: phone, enum_code: 'WORK' }]
+            },
+            {
+                field_code: 'EMAIL',
+                values: [{ value: email, enum_code: 'WORK' }]
+            },
+            {
+                field_id: 2306677,
+                values: [{ value: course }]
+            }
+        ];
+
+        await axios.patch(`https://${AMO_DOMAIN}/api/v4/contacts`, [{
             id: entry.contactId,
             name,
-            custom_fields_values: [
-                {
-                    field_code: 'PHONE',
-                    values: [{ value: phone }]
-                },
-                {
-                    field_code: 'EMAIL',
-                    values: [{ value: email }]
-                }
-            ]
-        };
+            custom_fields_values: contactUpdatePayload
+        }], { headers });
 
-        await axios.patch(`https://${AMO_DOMAIN}/api/v4/contacts`, [contactUpdatePayload], { headers });
+        // ✉️ Добавим комментарий в сделку как результат
+        await axios.post(`https://${AMO_DOMAIN}/api/v4/leads/${entry.leadId}/notes`, [{
+            note_type: "common",
+            params: {
+                text: `✅ Заявка оформлена!\n👤 Имя: ${name}\n📞 Телефон: ${phone}\n📘 Курс: ${course}`
+            }
+        }], { headers }); // note
 
-        res.json({ status: 'ok', message: 'Данные успешно обновлены' });
+        res.json({ status: 'ok', message: 'Данные успешно обновлены и сообщение добавлено' });
     } catch (error) {
         console.error('Ошибка на шаге 2:');
         if (error.response) {

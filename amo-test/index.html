@@ -115,12 +115,18 @@
                 if (data.error) throw new Error(data.error);
 
                 document.getElementById('status').innerText = '✅ Заявка успешно отправлена!';
-                showStep(0);
+
+                // ⏳ Даем 1 секунду пользователю увидеть сообщение, потом обновляем
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+
             } catch (err) {
                 console.error('Ошибка на шаге 2:', err);
                 alert('Ошибка шага 2: ' + err.message);
             }
         }
+
     </script>
 </body>
 

@@ -11,14 +11,11 @@ const PORT = 3000;
 
 const CLIENT_ID = '0c026147-bf5f-4157-9ae3-6f7ad1ef7a68';
 const CLIENT_SECRET = '5aOpt8J5JWOZwH3B0t2l7ZQaU3ZxFKmHlcupvb1OPlY0zoyuAVcKs207jP1p8Suq';
-const REDIRECT_URI = 'https://aecbf1f9b56a.ngrok-free.app/oauth';
+const REDIRECT_URI = 'https://15909ddf1b6e.ngrok-free.app/oauth';
 const AMO_DOMAIN = 'lazizkhamrakulov.amocrm.ru';
 const TOKEN_PATH = './tokens.json';
 
 let temporaryStorage = {};
-
-// 👉 Замените на ID вашего кастомного поля "Курс"
-const COURSE_FIELD_ID = 123456; // ← замените это значение на своё
 
 function saveTokens(tokens) {
     const expiresAt = Date.now() + tokens.expires_in * 1000;
@@ -46,6 +43,51 @@ async function refreshTokensIfNeeded() {
     return tokens;
 }
 
+async function findContactByPhone(phone, headers) {
+    const query = phone.replace(/\D/g, '');
+
+    const response = await axios.get(`https://${AMO_DOMAIN}/api/v4/contacts`, {
+        headers,
+        params: { query }
+    });
+
+    const contacts = response.data._embedded?.contacts || [];
+
+    for (const contact of contacts) {
+        const phones = (contact.custom_fields_values || [])
+            .filter(f => f.field_code === 'PHONE')
+            .flatMap(f => f.values.map(v => v.value.replace(/\D/g, '')));
+
+        if (phones.includes(query)) {
+            return contact;
+        }
+    }
+
+    return null;
+}
+
+async function findActiveLeadForContact(contactId, headers) {
+    const response = await axios.get(`https://${AMO_DOMAIN}/api/v4/contacts/${contactId}/links`, {
+        headers,
+        params: { with: 'leads' }
+    });
+
+    const links = response.data._embedded?.links || [];
+    const leadLinks = links.filter(link => link.to_entity_type === 'leads');
+    if (leadLinks.length === 0) return null;
+
+    const leadIds = leadLinks.map(link => link.to_entity_id);
+
+    const leadsResp = await axios.get(`https://${AMO_DOMAIN}/api/v4/leads`, {
+        headers,
+        params: { id: leadIds.join(',') }
+    });
+
+    const leads = leadsResp.data._embedded?.leads || [];
+    return leads.find(lead => ![142, 143].includes(lead.status_id)) || null;
+}
+
+// Шаг 1
 app.post('/api/lead-step1', async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: 'Номер телефона обязателен' });
@@ -57,41 +99,64 @@ app.post('/api/lead-step1', async (req, res) => {
             'Content-Type': 'application/json',
         };
 
-        // 1. Создаем сделку
-        const leadResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/leads`, [{
-            name: 'Новый интерес',
-            status_id: 78254394,
-            // pipeline_id: 9850462, 
-        }], { headers });
+        let contact = await findContactByPhone(phone, headers);
+        let contactId;
 
-        const leadId = leadResp.data._embedded.leads[0].id;
+        if (contact) {
+            const hasName = contact.name && contact.name !== 'Без имени';
+            const emailField = (contact.custom_fields_values || []).find(f => f.field_code === 'EMAIL');
+            const courseField = (contact.custom_fields_values || []).find(f => f.field_id === 2306677);
+            const hasEmail = emailField?.values?.[0]?.value;
+            const hasCourse = courseField?.values?.[0]?.value;
 
-        // 2. Создаем контакт
-        const contactResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/contacts`, [{
-            name: 'Без имени',
-            custom_fields_values: [{
-                field_code: 'PHONE',
-                values: [{ value: phone, enum_code: 'WORK' }]
-            }]
-        }], { headers });
+            if (hasName && hasEmail && hasCourse) {
+                return res.status(400).json({ error: 'По этому номеру уже зарегистрирован учащийся' });
+            }
 
-        const contactId = contactResp.data._embedded.contacts[0].id;
+            contactId = contact.id;
+        } else {
+            const contactResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/contacts`, [{
+                name: 'Без имени',
+                custom_fields_values: [{
+                    field_code: 'PHONE',
+                    values: [{ value: phone, enum_code: 'WORK' }]
+                }]
+            }], { headers });
 
-        // 3. Привязываем контакт к сделке
-        await axios.post(`https://${AMO_DOMAIN}/api/v4/leads/${leadId}/link`, [{
-            to_entity_id: contactId,
-            to_entity_type: 'contacts'
-        }], { headers });
+            contactId = contactResp.data._embedded.contacts[0].id;
+        }
+
+        // Проверка на существующую активную сделку
+        let leadId;
+        const existingLead = await findActiveLeadForContact(contactId, headers);
+
+        if (existingLead) {
+            leadId = existingLead.id;
+        } else {
+            const leadResp = await axios.post(`https://${AMO_DOMAIN}/api/v4/leads`, [{
+                name: 'Новый интерес',
+                status_id: 78254394,
+            }], { headers });
+
+            leadId = leadResp.data._embedded.leads[0].id;
+
+            // Привязка контакта к сделке
+            await axios.post(`https://${AMO_DOMAIN}/api/v4/leads/${leadId}/link`, [{
+                to_entity_id: contactId,
+                to_entity_type: 'contacts'
+            }], { headers });
+        }
 
         temporaryStorage[phone] = { leadId, contactId };
-
         res.json({ status: 'ok', leadId });
+
     } catch (error) {
         console.error('Ошибка на шаге 1:', error.response?.data || error.message);
-        res.status(500).json({ error: 'Ошибка на шаге 1' });
+        res.status(500).json({ error: error.response?.data?.detail || 'Ошибка на шаге 1' });
     }
 });
 
+// Шаг 2
 app.post('/api/lead-step2', async (req, res) => {
     const { name, email, course, phone } = req.body;
     const entry = temporaryStorage[phone];
@@ -133,15 +198,7 @@ app.post('/api/lead-step2', async (req, res) => {
             custom_fields_values: contactUpdatePayload
         }], { headers });
 
-        // ✉️ Добавим комментарий в сделку как результат
-        await axios.post(`https://${AMO_DOMAIN}/api/v4/leads/${entry.leadId}/notes`, [{
-            note_type: "common",
-            params: {
-                text: `✅ Заявка оформлена!\n👤 Имя: ${name}\n📞 Телефон: ${phone}\n📘 Курс: ${course}`
-            }
-        }], { headers }); // note
-
-        res.json({ status: 'ok', message: 'Данные успешно обновлены и сообщение добавлено' });
+        res.json({ status: 'ok', message: 'Данные успешно обновлены' });
     } catch (error) {
         console.error('Ошибка на шаге 2:');
         if (error.response) {
@@ -154,7 +211,7 @@ app.post('/api/lead-step2', async (req, res) => {
     }
 });
 
-
+// Авторизация
 app.get('/oauth', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('Нет кода авторизации');

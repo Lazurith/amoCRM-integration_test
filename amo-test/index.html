@@ -32,6 +32,11 @@
         button {
             padding: 0.7rem 1.2rem;
         }
+
+        #status {
+            margin-top: 1rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -78,7 +83,7 @@
 
         async function sendStep1() {
             const phone = document.getElementById('phone').value.trim();
-            if (!phone) return alert('Введите номер');
+            if (!phone) return alert('Введите номер телефона');
 
             try {
                 const res = await fetch(`${API_URL}/api/lead-step1`, {
@@ -88,7 +93,13 @@
                 });
 
                 const data = await res.json();
-                if (data.error) throw new Error(data.error);
+
+                if (!res.ok) {
+                    if (data.error && data.error.includes('зарегистрирован')) {
+                        return alert(data.error);
+                    }
+                    throw new Error(data.error || 'Неизвестная ошибка');
+                }
 
                 showStep(2);
             } catch (err) {
@@ -112,21 +123,15 @@
                 });
 
                 const data = await res.json();
-                if (data.error) throw new Error(data.error);
+
+                if (!res.ok) throw new Error(data.error || 'Неизвестная ошибка');
 
                 document.getElementById('status').innerText = '✅ Заявка успешно отправлена!';
-
-                // ⏳ Даем 1 секунду пользователю увидеть сообщение, потом обновляем
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
-
+                setTimeout(() => location.reload(), 1000);
             } catch (err) {
-                console.error('Ошибка на шаге 2:', err);
                 alert('Ошибка шага 2: ' + err.message);
             }
         }
-
     </script>
 </body>
 

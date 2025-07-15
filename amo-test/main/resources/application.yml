@@ -1,0 +1,9 @@
+server:
+  port: 3000
+
+amo:
+  clientId: 0c026147-bf5f-4157-9ae3-6f7ad1ef7a68
+  clientSecret: 5aOpt8J5JWOZwH3B0t2l7ZQaU3ZxFKmHlcupvb1OPlY0zoyuAVcKs207jP1p8Suq
+  redirectUri: https://15909ddf1b6e.ngrok-free.app/oauth
+  domain: lazizkhamrakulov.amocrm.ru
+  tokenPath: tokens.json

@@ -10,9 +10,3 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-const CLIENT_ID = '0c026147-bf5f-4157-9ae3-6f7ad1ef7a68';
-const CLIENT_SECRET = '5aOpt8J5JWOZwH3B0t2l7ZQaU3ZxFKmHlcupvb1OPlY0zoyuAVcKs207jP1p8Suq';
-const REDIRECT_URI = 'https://aecbf1f9b56a.ngrok-free.app/oauth';
-const AMO_DOMAIN = 'lazizkhamrakulov.amocrm.ru';
-const TOKEN_PATH = './tokens.json';
-
